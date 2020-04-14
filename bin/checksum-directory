@@ -1,0 +1,53 @@
+#! /usr/bin/python
+
+# Copyright (C) 2012 Canonical Ltd.
+# Author: Colin Watson <cjwatson@ubuntu.com>
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 3 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""Checksum all the files in a directory."""
+
+from optparse import OptionParser
+import os
+import sys
+
+sys.path.insert(0, os.path.join(sys.path[0], os.pardir, "lib"))
+
+
+def main():
+    from cdimage.checksums import (
+        checksum_directory,
+        metalink_checksum_directory,
+    )
+    from cdimage.config import Config
+
+    parser = OptionParser("%prog [options] DIR [OLD_DIR ...]")
+    parser.add_option(
+        "--map", metavar="s/REGEXP/REPLACEMENT/",
+        help="apply s/// expression to old entries to find matching checksum")
+    parser.add_option(
+        "--metalink", default=False, action="store_true",
+        help="create metalink checksums")
+    options, args = parser.parse_args()
+    if len(args) < 1:
+        parser.error("need directory")
+    config = Config()
+    if options.metalink:
+        metalink_checksum_directory(config, args[0], old_directories=args)
+    else:
+        checksum_directory(
+            config, args[0], old_directories=args, map_expr=options.map)
+
+
+if __name__ == "__main__":
+    main()

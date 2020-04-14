@@ -1,0 +1,60 @@
+#! /usr/bin/python
+
+# Copyright (C) 2012 Canonical Ltd.
+# Author: Colin Watson <cjwatson@ubuntu.com>
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 3 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""Print a manifest of a tree."""
+
+from __future__ import print_function
+
+from optparse import OptionParser
+import os
+import stat
+import sys
+
+sys.path.insert(0, os.path.join(sys.path[0], os.pardir, "lib"))
+
+
+def main():
+    from cdimage.config import Config
+    from cdimage.tree import Tree
+
+    parser = OptionParser("%prog DIRECTORY [FILE]")
+    _, args = parser.parse_args()
+    if len(args) < 1:
+        parser.error("need directory")
+    directory = args[0]
+    if len(args) >= 2:
+        path = os.path.join(directory, args[1])
+        output = open("%s.new" % path, "w")
+        output_fd = output.fileno()
+        os.fchmod(output_fd, os.fstat(output_fd).st_mode | stat.S_IWGRP)
+    else:
+        path = None
+        output = sys.stdout
+    config = Config()
+    try:
+        tree = Tree.get_for_directory(config, directory, "daily")
+        for line in tree.manifest():
+            print(line, file=output)
+    finally:
+        if path is not None:
+            output.close()
+    if path is not None:
+        os.rename("%s.new" % path, path)
+
+
+if __name__ == "__main__":
+    main()

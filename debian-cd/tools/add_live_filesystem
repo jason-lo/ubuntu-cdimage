@@ -1,0 +1,123 @@
+#! /bin/sh -e
+
+BDIR=$TDIR/$CODENAME-$FULLARCH
+
+if [ "$CDIMAGE_LIVE" ]; then
+	DIR=casper
+else
+	DIR=install
+fi
+mkdir -p "$BDIR/CD1/$DIR"
+if [ -e "$LIVEIMAGES/$FULLARCH.cloop" ]; then
+	ln "$LIVEIMAGES/$FULLARCH.cloop" "$BDIR/CD1/$DIR/filesystem.cloop"
+elif [ -n "$(ls $LIVEIMAGES/$FULLARCH*.squashfs 2>/dev/null)" ]; then
+	for ext in squashfs squashfs.gpg modules.squashfs-generic modules.squashfs-generic-hwe size manifest; do
+		for origfilename in $(ls $LIVEIMAGES/$FULLARCH*.$ext 2>/dev/null); do
+			# Strip fullarch from file basename and optionally prepend "filesystem."
+			# For instance:
+			# <arch>.filename.<ext> -> filename.<ext>
+			# <arch>.<ext> -> filesystem.<ext>
+			origfilename="$(basename ${origfilename})"
+			filename=${origfilename#$FULLARCH.}
+			if [ "$filename" = "$ext" ]; then
+				filename="filesystem.$filename"
+			fi
+
+			# Copy in squashfs corresponding subdirectory for multi-layer with sublayers system
+			case $filename in
+				maas*)
+					filepath="maas/$filename"
+					;;
+				*.modules.squashfs-*)
+					# Actually, do not prefix modules, initrd expects this name
+					filepath="extras/${filename#filesystem.}"
+					;;
+				*)
+					filepath="$filename"
+					;;
+			esac
+
+			mkdir -p $BDIR/CD1/$DIR/$(dirname "$filepath")
+			ln "$LIVEIMAGES/$origfilename" "$BDIR/CD1/$DIR/$filepath"
+		done
+	done
+else
+	echo "No filesystem for $FULLARCH!" >&2
+fi
+if [ -e "$LIVEIMAGES/$FULLARCH.usb-creator.exe" ]; then
+	ln "$LIVEIMAGES/$FULLARCH.usb-creator.exe" "$BDIR/CD1/usb-creator.exe"
+fi
+for item in kernel initrd; do
+	for path in "$LIVEIMAGES/$FULLARCH.$item"-*; do
+		if [ -f "$path" ]; then
+			ln "$path" "$BDIR/CD1/$DIR/filesystem.${path#$LIVEIMAGES/$FULLARCH.}"
+		fi
+	done
+done
+if [ -e "$LIVEIMAGES/$FULLARCH.manifest-remove" ]; then
+	ln "$LIVEIMAGES/$FULLARCH.manifest-remove" "$BDIR/CD1/$DIR/filesystem.manifest-remove" || true
+elif [ -e "$LIVEIMAGES/$FULLARCH.manifest-desktop" ]; then
+	ln "$LIVEIMAGES/$FULLARCH.manifest-desktop" "$BDIR/CD1/$DIR/filesystem.manifest-desktop" || true
+fi
+if [ -e "$LIVEIMAGES/$FULLARCH.manifest-minimal-remove" ]; then
+	ln "$LIVEIMAGES/$FULLARCH.manifest-minimal-remove" "$BDIR/CD1/$DIR/filesystem.manifest-minimal-remove" || true
+fi
+
+if [ "$PROJECT" = edubuntu ] && [ "$CDIMAGE_DVD" = 1 ]; then
+	case $ARCH in
+		amd64|i386)
+			# LTSP is i386 for both architectures
+			# Starting with raring (13.04), all the Edubuntu squashfses now
+			# reside under casper/
+			if [ "$DIST" = "precise" ]; then
+				mkdir -p "$BDIR/CD1/ltsp"
+				ln "$LIVEIMAGES/$FULLARCH.ltsp-squashfs" \
+					"$BDIR/CD1/ltsp/i386.img"
+			else
+				mkdir -p "$BDIR/CD1/casper"
+				ln "$LIVEIMAGES/$FULLARCH.ltsp-squashfs" \
+					"$BDIR/CD1/casper/ltsp.squashfs"
+# FIXME: Disabled edubuntu-server (LP: #1154601)
+#				ln "$LIVEIMAGES/$FULLARCH.server-squashfs" \
+#					"$BDIR/CD1/casper/server.squashfs"
+			fi
+			;;
+	esac
+fi
+
+if [ "$CDIMAGE_LIVE" ]; then
+	# Extract the UUID from the casper initrd, if any.
+	for path in "$BDIR/CD1/casper/filesystem.initrd"-*; do (
+		[ -e "$path" ] || continue
+		mkdir -p "$BDIR/uuid"
+		cd "$BDIR/uuid"
+		PATH=$PATH:/home/cdimage unmkinitramfs $path .
+		if [ -e conf/uuid.conf ]; then
+			mkdir -p "$BDIR/CD1/.disk"
+			mv conf/uuid.conf "$BDIR/CD1/.disk/casper-uuid-${path#$BDIR/CD1/casper/filesystem.initrd-}"
+		elif [ -e main/conf/uuid.conf ]; then
+			mkdir -p "$BDIR/CD1/.disk"
+			mv main/conf/uuid.conf "$BDIR/CD1/.disk/casper-uuid-${path#$BDIR/CD1/casper/filesystem.initrd-}"
+		fi
+		cd .. && rm -rf uuid
+	); done
+fi
+
+# Release notes URL for use by Ubiquity. '${LANG}' will be replaced with the
+# installation locale code.
+RELEASE_NOTES=
+case $PROJECT in
+	ubuntu|kubuntu|edubuntu|xubuntu|gobuntu|ubuntustudio|mythbuntu|lubuntu|ubuntu-gnome|ubuntukylin|ubuntu-desktop-next|ubuntu-mate|ubuntu-budgie)
+		case $DIST in
+			warty|hoary|breezy|dapper|edgy)
+				;;
+			*)
+				RELEASE_NOTES="http://www.ubuntu.com/getubuntu/releasenotes?os=$PROJECT&ver=${DEBVERSION%% *}&lang=\${LANG}"
+				;;
+		esac
+		;;
+esac
+if [ "$RELEASE_NOTES" ]; then
+	mkdir -p "$BDIR/CD1/.disk"
+	echo "$RELEASE_NOTES" > "$BDIR/CD1/.disk/release_notes_url"
+fi

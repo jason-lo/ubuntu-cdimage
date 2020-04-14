@@ -1,0 +1,44 @@
+#! /usr/bin/python
+
+# Copyright (C) 2013 Canonical Ltd.
+# Author: Colin Watson <cjwatson@ubuntu.com>
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 3 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""Convert Germinate output to debian-cd task lists."""
+
+from optparse import OptionParser
+import os
+import sys
+
+sys.path.insert(0, os.path.join(sys.path[0], os.pardir, "lib"))
+
+
+def main():
+    from cdimage.config import Config
+    from cdimage.germinate import GerminateOutput
+
+    parser = OptionParser("%prog IMAGE_TYPE")
+    _, args = parser.parse_args()
+    if len(args) < 1:
+        parser.error("need image-type")
+    config = Config(IMAGE_TYPE=args[0])
+    directory = os.path.join(
+        config.root, "scratch", config.project, config.series,
+        config.image_type, "germinate")
+    germinate_output = GerminateOutput(config, directory)
+    germinate_output.write_tasks()
+
+
+if __name__ == "__main__":
+    main()
